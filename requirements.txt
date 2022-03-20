@@ -1,0 +1,8 @@
+wheel
+sqlalchemy
+python-magic
+pefile
+psycopg2-binary
+cryptography
+asn1crypto
+redis

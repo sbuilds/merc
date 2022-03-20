@@ -1,0 +1,142 @@
+#
+# Need to build all images first tagged with local/...
+#
+version: '3.7'
+services:
+    redis:
+        image: 'redis:6'
+        restart: "no"
+        # command: --appendonly yes --maxmemory 6gb --maxmemory-policy allkeys-lru
+        # command: --maxmemory-policy allkeys-lru
+        ports:
+            - 127.0.0.1:6379:6379
+        networks:
+            - channel0
+        # sysctls:
+        #     net.core.somaxconn: 1024
+
+        # deploy:
+        #     resources:
+        #         limits:
+        #             memory: 6144M
+
+    db:
+        image: postgres:12
+        restart: unless-stopped
+        environment:
+            - POSTGRES_USER=${POSTGRES_USER:-pguser}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pguser}
+            - POSTGRES_DB=${POSTGRES_DB:-merc}
+            - PGDATA=/var/lib/postgresql/data/pgdata
+        volumes:
+            - type: volume
+              source: dbdata
+              target: /var/lib/postgresql/data/pgdata
+        ports:
+            - 127.0.0.1:5432:5432
+        networks:
+            - channel0  
+
+    # merc-preprocess:
+    #     image: local/merc
+    #     command: python3 merc.py preprocess
+    #     restart: unless-stopped
+    #     depends_on: 
+    #         - db
+    #         - redis
+    #     environment: 
+    #         - POSTGRES_USER=${POSTGRES_USER:-pguser}
+    #         - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pguser}
+    #         - POSTGRES_DB=${POSTGRES_DB:-merc}
+    #         - LOG_LEVEL=DEBUG
+    #         - POOL_SIZE=700
+    #     networks:
+    #         - channel0
+    #     volumes:
+    #         - type: bind
+    #           source: samples
+    #           target: ./samples
+
+    # merc-extract:
+    #     image: local/merc
+    #     command: python3 merc.py process
+    #     restart: "no"
+    #     depends_on: 
+    #         - db
+    #         - redis
+    #         - merc-preprocess
+    #     environment: 
+    #         - POSTGRES_USER=${POSTGRES_USER:-pguser}
+    #         - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pguser}
+    #         - POSTGRES_DB=${POSTGRES_DB:-merc}
+    #         - LOG_LEVEL=INFO
+    #         - POOL_SIZE=700
+    #     networks:
+    #         - channel0
+    #     volumes:
+    #         - type: bind
+    #           source: /Volumes/TANK/downloads/pe-machine-learning-dataset/samples
+    #           target: /samples
+
+    merc-strings:
+        image: local/floss
+        command: python3 merc.py process-strings
+        restart: "no"
+        depends_on: 
+            - db
+            - redis
+        environment: 
+            - POSTGRES_USER=${POSTGRES_USER:-pguser}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pguser}
+            - POSTGRES_DB=${POSTGRES_DB:-merc}
+            - LOG_LEVEL=INFO
+            - POOL_SIZE=700
+        networks:
+            - channel0
+        volumes:
+            - type: bind
+              source: /Volumes/TANK/downloads/pe-machine-learning-dataset/samples
+              target: /samples   
+         
+    merc-store:
+        image: local/merc
+        command: python3 merc.py store
+        restart: unless-stopped
+        depends_on: 
+            - db
+            - redis
+            - merc-lookup
+        environment: 
+            - POSTGRES_USER=${POSTGRES_USER:-pguser}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pguser}
+            - POSTGRES_DB=${POSTGRES_DB:-merc}
+            - LOG_LEVEL=INFO
+            - POOL_SIZE=700
+        networks:
+            - channel0
+    # meric-load:
+    #     image: local/merc
+    #     command: python3 merc.py store
+    #     restart: unless-stopped
+    #     depends_on: 
+    #         - db
+    #         - redis
+    #         - dnstrack-lookup
+    #     environment: 
+    #         - POSTGRES_USER=${POSTGRES_USER:-pguser}
+    #         - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pguser}
+    #         - POSTGRES_DB=${POSTGRES_DB:-merc}
+    #         - LOG_LEVEL=DEBUG
+    #         - POOL_SIZE=700
+    #     networks:
+    #         - channel0
+    #     volumes:
+    #         - type: bind
+    #           source: samples
+    #           target: ./samples
+volumes:
+    dbdata:
+
+networks:
+    channel0:
+        name: channel0
