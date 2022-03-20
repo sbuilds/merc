@@ -34,6 +34,13 @@ class FileStrings:
 
 class FileMetaData:
     """
+        FileMetaData class
+        Container for parsing other file data not part of pefile. 
+
+        Imports:
+            math: for entropy calculation
+            hashlib: file hashing
+            python-magic: for file magic
     """
 
     def __init__(self, id: int, file_name: str, file_path: str) -> None:
@@ -80,6 +87,19 @@ class FileMetaData:
 
 class PEMetaData:
     """
+        PEMetaData class
+        Container for PE data and file location
+        Parameter names match database columns.
+
+        Imports:
+            pefile: 
+            cryptography: for parsing certificates
+            asn1crypto: for parsing certificates
+
+        Params:
+            id: database reference to orignal database record
+            file_name: the name of the file
+            file_path: absolute path of the file
     """
     def __init__(self, id: int, file_name: str, file_path: str) -> None:
         self.database_id = id
@@ -88,6 +108,10 @@ class PEMetaData:
         self.pe = pefile.PE(self.filepath)
 
     def headers(self) -> Dict:
+        """
+            Extract headers 
+            number of sections header
+        """
         headers = {}
         
         headers['number_of_sections'] = self.pe.FILE_HEADER.NumberOfSections
@@ -95,6 +119,9 @@ class PEMetaData:
         return headers
 
     def headers_optional(self) -> Dict:
+        """
+            Extract additional headers
+        """
         headers_optional = {}
         headers_optional['size_of_code'] = self.pe.OPTIONAL_HEADER.SizeOfCode
         headers_optional['size_of_image'] = self.pe.OPTIONAL_HEADER.SizeOfImage
@@ -106,6 +133,9 @@ class PEMetaData:
         return headers_optional
 
     def sections(self) -> Dict:
+        """ 
+            Extrat pe-file sections and mark characteristics.
+        """
         sections = {}
         try:
             pe_sections = self.pe.sections
@@ -116,14 +146,17 @@ class PEMetaData:
                 section_data = {}
                 section_data['size_of_raw_data'] = section.SizeOfRawData
                 section_data['misc_virtual_size'] = section.Misc_VirtualSize
-                section_data['contains_code'] = True if section.Characteristics & 0x00000020 > 0 else False # Contains code
-                section_data['executable'] = True if section.Characteristics & 0x20000000 > 0 else False # Contains code
-                section_data['writable'] = True if section.Characteristics & 0x80000000 > 0 else False # Contains code
+                section_data['contains_code'] = True if section.Characteristics & 0x00000020 > 0 else False
+                section_data['executable'] = True if section.Characteristics & 0x20000000 > 0 else False
+                section_data['writable'] = True if section.Characteristics & 0x80000000 > 0 else False
                 sections[section.Name.decode('utf-8', errors='ignore').replace('\x00', '')] = section_data
         finally:            
             return sections
 
     def imports(self) -> List:
+        """
+            Extract pe-file imports if there are any.
+        """
         imports = []
         try:
             entries = self.pe.DIRECTORY_ENTRY_IMPORT
@@ -139,6 +172,9 @@ class PEMetaData:
             return imports
 
     def exports(self) -> List:
+        """
+            Extract pe-file exports if there are any.
+        """
         exports = []
         
         try:
@@ -153,7 +189,9 @@ class PEMetaData:
 
     def cert(self) -> List:
         """
-            add x509 extensions
+            extract certficates from pe file (if signed)
+            Makes use of pefile, cryptography, and asn1crypto library
+            todo: add x509 extensions
         """
         certificates = []
 
@@ -213,23 +251,6 @@ class PEMetaData:
 
         return certificates
 
-    # def metadata(self) -> Dict:
-    #     md = {}
-    #     md['id'] = self.database_id
-    #     md['magic']  = self.magic()
-    #     md['file_size'] = self.file_size()
-    #     md.update(self.hash())
-    #     md['entropy'] = self.entropy()
-
-    #     md['imports'] = self.imports()
-    #     md['exports'] = self.exports()
-    #     md['headers'] = self.headers()
-    #     md['headers_optional'] = self.headers_optional()
-    #     md['sections'] = self.sections()
-    #     md['certificates'] = self.cert()
-
-    #     return md
-
 class MyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, bytes):
@@ -249,8 +270,6 @@ def main():
     args = parser.parse_args()
     logger.debug(f"args: {args}")
 
-    # p = PEMetaData(args.file)
-    # print(json.dumps(p.metadata(), indent=2, cls=MyEncoder))
 
     if args.command == 'preprocess':
         files = db.read_files()
@@ -266,7 +285,6 @@ def main():
                     rec_id = records[0][1][0][0].decode('utf-8')
                     logger.debug(f"received message, id: {rec_id}")
 
-                    # data = [json.loads(x[1][b'data'].decode('utf-8')) for x in msg[0][1]]
                     data = json.loads(records[0][1][0][1][b'data'].decode('utf-8'))
                     logger.info(f"received files {data['file_name']}")
                     logger.debug(f"received data: {data}")
@@ -298,6 +316,7 @@ def main():
                     # client.xdel('process', rec_id)
     
     if args.command == 'process-strings':
+        from floss import strings as static
         while True:
             records = client.xreadgroup('process-strings-group','process-strings',{'process':'>'}, count=1)
             if records:
@@ -309,10 +328,15 @@ def main():
                 logger.debug(f"received data: {data}")      
                 path = Path(f"{data['file_path']}/{data['file_name']}")    
 
-                output = subprocess.run(['floss', '-j', '--only=static', str(path)], capture_output=True)
-                strings = json.loads(output.stdout)
+                # output = subprocess.run(['floss', '-j', '--only=static', str(path)], capture_output=True)
+                with open(path, 'rb') as f:
+                    str_itr = static.extract_ascii_unicode_strings(f.read())
+                strings = [s.string for s in str_itr]
 
-                data.update({'strings':strings['strings']['static_strings']})
+                # strings = json.loads(output.stdout)
+
+                # data.update({'strings':strings['strings']['static_strings']})
+                data.update({'strings':strings})
                 rec_id = client.xadd('processed', {'data': json.dumps(data)})
 
     if args.command == 'store':
@@ -322,8 +346,6 @@ def main():
                 rec_id = records[0][1][0][0].decode('utf-8')
                 recs = len(records[0][1])
                 logger.debug(f"received {recs} records")
-                # print(records)
-
 
                 data = [json.loads(x[1][b'data'].decode('utf-8')) for x in records[0][1]]
                 logger.debug(f"received data: {data}")
@@ -333,7 +355,6 @@ def main():
                 except Exception as e:
                     logger.error(f"database save for {[x['id'] for x in data]} failed, {e}")
                 else:
-                    # pass
                     client.xdel('processed', rec_id)
 
 
@@ -364,4 +385,5 @@ if __name__ == '__main__':
     except redis.exceptions.ResponseError as e:             
         logger.info(f"redis client: {e}")
         pass
+
     main()

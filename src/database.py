@@ -8,34 +8,24 @@ merc database
 
 import logging
 import json
-import collections
 import os
-from re import M
 import sys
 from typing import List, Dict, Callable, Optional, Union
-
 from datetime import datetime
+from contextlib import contextmanager
 
 # sqlalchemy
 from sqlalchemy import func, case, create_engine, Column, Integer, Numeric, Float, String, DateTime, Text, Boolean, UnicodeText, UniqueConstraint, ForeignKey, Table, or_, and_, distinct, update
 from sqlalchemy import UniqueConstraint, Index, text
 from sqlalchemy.orm import declarative_base, mapper, scoped_session, sessionmaker, relationship, backref, join, outerjoin, subqueryload
-from contextlib import contextmanager
 from sqlalchemy.sql import func
 from sqlalchemy.orm.exc import MultipleResultsFound
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.exc import IntegrityError
-
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.postgresql import JSONB, TEXT, NUMERIC, ARRAY, UUID, BYTEA
+from sqlalchemy.dialects.postgresql import JSONB, TEXT, NUMERIC, ARRAY, BYTEA
 from sqlalchemy.sql.expression import bindparam
-
-
-from sqlalchemy.ext.hybrid import hybrid_property, hybrid_method
-
 from sqlalchemy.sql.schema import Constraint
-
-# from cron_validator import CronValidator
 
 class DictSerializable:
     def to_dict(self, skipfields=[]):
@@ -63,7 +53,6 @@ logger = logging.getLogger(__name__)
 logger.addHandler(console)
 logger.setLevel(os.environ.get('LOG_LEVEL','INFO'))
 
-
 Base = declarative_base(cls=(DictSerializable,))
 
 class MetaData(Base):
@@ -72,12 +61,12 @@ class MetaData(Base):
         
         id (Integer) - Primary Key
         date_added (DateTime) - datetime the file was added
-        filename (String) 
-        filepath (String)
+        file_name (String) 
+        file_path (String)
         processed (Boolean) - flag to set if processed
-        md5 (ByteA) - md5 hash of file
-        sha1 (ByteA) - sha1 hash of file
-        sha256 (ByteA) - sha256 of file
+        md5 (String) - md5 hash of file
+        sha1 (String) - sha1 hash of file
+        sha256 (String) - sha256 of file
         magic (String) - file header magic
         file_size (Integer) - file size in bytes
         file_entropy (Float) - file entropy value
@@ -87,10 +76,8 @@ class MetaData(Base):
         sections (JSONB) - [{name: <string>, size: <number>, virt_size: <number>, character: <string>},]
         pe_optional_header (JSONB) - {size_if_code:, size_of_image:, size_of_stack_reserve:, size_of_stack_commit:,
                             size_of_heap_reserve:, size_of_heap_commit:, }
-
-        # hashes (JSONB) - {md5:, sha1:, sha256:, sha3:,}
-        # cert_info (?) - File signing certificate info
-        # strings (Array) - file strings
+        certificates (JSONB) - File signing certificate info
+        strings (JSONB) - file strings
 
     """
 
