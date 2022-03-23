@@ -251,14 +251,6 @@ class PEMetaData:
 
         return certificates
 
-class MyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, bytes):
-            print(obj)
-            return str(obj, encoding='utf-8')
-        return json.JSONEncoder.default(self, obj)
-
-
 def main():
     import argparse
 
@@ -317,6 +309,7 @@ def main():
     
     if args.command == 'process-strings':
         from floss import strings as static
+
         while True:
             records = client.xreadgroup('process-strings-group','process-strings',{'process':'>'}, count=1)
             if records:
