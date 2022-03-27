@@ -2,7 +2,6 @@
 
 __version__ = '0.1'
 
-import filecmp
 import os
 import sys
 import logging
@@ -10,24 +9,17 @@ import logging.config
 import argparse
 import json
 import re
-from datetime import datetime, date, timedelta
-from typing import List, Dict, Callable, Optional, Union, Iterable
-from collections import namedtuple
+from typing import List, Dict
 import hashlib
 from pathlib import Path
-import subprocess
 
 import redis
-
 import pefile
 import magic
-
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from asn1crypto import cms
-
-import database as db
 
 class FileStrings:
     pass
@@ -35,7 +27,7 @@ class FileStrings:
 class FileMetaData:
     """
         FileMetaData class
-        Container for parsing other file data not part of pefile. 
+        Container for parsing other file data not utilizing pefile. 
 
         Imports:
             math: for entropy calculation
@@ -67,12 +59,18 @@ class FileMetaData:
 
     def magic(self) -> str:
         """
-        python-magic
-        libmagic
+            Determine file magic type with libmagic
+
+        Imports:
+            python-magic
+            libmagic
         """
         return magic.from_file(self.filepath)
 
     def entropy(self) -> float:
+        """
+            calculate Shannon Entropy
+        """
         import math
         counters = {byte: 0 for byte in range(2 ** 8 )}
         for byte in self.data:
@@ -252,16 +250,12 @@ class PEMetaData:
         return certificates
 
 def main():
-    import argparse
-
     parser = argparse.ArgumentParser()
     parser.add_argument('command', action='store', type=str,
                         help="Command to run")
-    # parser.add_argument('file', action='store', help="")
 
     args = parser.parse_args()
     logger.debug(f"args: {args}")
-
 
     if args.command == 'preprocess':
         files = db.read_files()
@@ -271,6 +265,7 @@ def main():
             logger.debug(f"added {rec_id}: {file.file_path}/{file.file_name} to stream")
             
     if args.command == 'process':
+            # process command extracts the file meta data and PE meta data
             while True:
                 records = client.xreadgroup('process-group','process',{'process':'>'}, count=1)#, noack=True)
                 if records:
@@ -308,6 +303,9 @@ def main():
                     # client.xdel('process', rec_id)
     
     if args.command == 'process-strings':
+        # process-strings command extracts the strings (static only) from the binary
+        # this is using floss (flare-floss) but current release of floss is not python 3. floss
+        # is installed from github directly instead.
         from floss import strings as static
 
         while True:
@@ -321,18 +319,19 @@ def main():
                 logger.debug(f"received data: {data}")      
                 path = Path(f"{data['file_path']}/{data['file_name']}")    
 
-                # output = subprocess.run(['floss', '-j', '--only=static', str(path)], capture_output=True)
                 with open(path, 'rb') as f:
                     str_itr = static.extract_ascii_unicode_strings(f.read())
                 strings = [s.string for s in str_itr]
 
-                # strings = json.loads(output.stdout)
-
-                # data.update({'strings':strings['strings']['static_strings']})
                 data.update({'strings':strings})
                 rec_id = client.xadd('processed', {'data': json.dumps(data)})
 
     if args.command == 'store':
+        # store command (container) get the extracted data from process or process-strings and 
+        # stores it in postgres database, see database.py.
+
+        import database as db
+
         while True:
             records = client.xreadgroup('process-group','store',{'processed':'>'}, count=100)
             if records:
@@ -366,6 +365,7 @@ if __name__ == '__main__':
         client.xgroup_create('process','process-group', mkstream=True)
     except redis.exceptions.ResponseError as e:             
         logger.info(f"redis client: {e}")
+        pass
 
     try:
         client.xgroup_create('processed','process-group', mkstream=True)
