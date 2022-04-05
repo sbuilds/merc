@@ -9,6 +9,7 @@ import logging.config
 import argparse
 import json
 import re
+from tarfile import RECORDSIZE
 from typing import List, Dict
 import hashlib
 from pathlib import Path
@@ -324,7 +325,7 @@ def main():
                 strings = [s.string for s in str_itr]
 
                 data.update({'strings':strings})
-                rec_id = client.xadd('processed', {'data': json.dumps(data)})
+                rec_id = client.xadd('processed-strings', {'data': json.dumps(data)})
 
     if args.command == 'store':
         # store command (container) get the extracted data from process or process-strings and 
@@ -333,21 +334,40 @@ def main():
         import database as db
 
         while True:
-            records = client.xreadgroup('process-group','store',{'processed':'>'}, count=100)
+            records = client.xreadgroup('process-group','store',{'processed':'>','processed-strings':'>'}, count=100)
             if records:
-                rec_id = records[0][1][0][0].decode('utf-8')
-                recs = len(records[0][1])
-                logger.debug(f"received {recs} records")
+                logger.debug(f"received {records}")
 
-                data = [json.loads(x[1][b'data'].decode('utf-8')) for x in records[0][1]]
-                logger.debug(f"received data: {data}")
-                
-                try:
-                    db.store_data(data)
-                except Exception as e:
-                    logger.error(f"database save for {[x['id'] for x in data]} failed, {e}")
-                else:
-                    client.xdel('processed', rec_id)
+                for rec in records:
+                    # need to split the streams 'processed' and 'processed-strings' 
+                    # so the database insert can work on each dataset respectively.
+                    if rec[0] == b'processed':
+                        metadata = [json.loads(x[1][b'data'].decode('utf-8')) for x in records[0][1]]
+                        rec_ids = [x[0].decode('utf-8') for x in records[0][1]]
+
+                        try:
+                            db.store_data(metadata)
+                        except Exception as e:
+                            logger.error(f"database save for {[x['id'] for x in metadata]} failed, {e}")
+                        else:
+                            try:
+                                client.xdel('processed', *rec_ids)
+                            except Exception as e:
+                                logger.error(f"xdel processed error: {e}")
+
+                    elif rec[0] == b'processed-strings':
+                        stringdata = [json.loads(x[1][b'data'].decode('utf-8')) for x in records[0][1]]
+                        rec_ids = [x[0].decode('utf-8') for x in records[0][1]]
+
+                        try:
+                            db.store_data(stringdata)
+                        except Exception as e:
+                            logger.error(f"database save for {[x['id'] for x in stringdata]} failed, {e}")
+                        else:
+                            try:
+                                client.xdel('processed-strings', *rec_ids)
+                            except Exception as e:
+                                logger.error(f"xdel processed-strings error: {e}")
 
 
 if __name__ == '__main__':
@@ -369,6 +389,8 @@ if __name__ == '__main__':
 
     try:
         client.xgroup_create('processed','process-group', mkstream=True)
+        client.xgroup_create('processed-strings','process-group', mkstream=True)
+
     except redis.exceptions.ResponseError as e:             
         logger.info(f"redis client: {e}")
         pass

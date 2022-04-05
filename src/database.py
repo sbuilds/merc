@@ -121,6 +121,7 @@ def store_data(data: List) -> None:
     insert_stmt = pg_insert(MetaData).values(data)
     update_columns = { k:insert_stmt.excluded[k] for k in data[0].keys() if k != 'id' }
     do_update_stmt = insert_stmt.on_conflict_do_update(index_elements=[MetaData.id], set_=update_columns)
+    logger.debug(f"sotre data stmt: {do_update_stmt}")
 
     with session_scope() as session:
         session.execute(do_update_stmt)
