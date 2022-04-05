@@ -6,3 +6,4 @@ psycopg2-binary
 cryptography
 asn1crypto
 redis
+git+https://github.com/mandiant/flare-floss

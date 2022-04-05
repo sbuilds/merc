@@ -29,6 +29,7 @@ services:
             - datanet  
 
     extract:
+        build: . 
         image: local/merc
         command: python3 merc.py process
         restart: "no"
@@ -43,12 +44,13 @@ services:
               target: /samples
 
     strings:
-        image: local/floss
+        image: local/merc
         command: python3 merc.py process-strings
         restart: "no"
         depends_on: 
             - db
             - redis
+            - extract
         networks:
             - datanet
         volumes:
@@ -63,6 +65,7 @@ services:
         depends_on: 
             - db
             - redis
+            - extract
         environment: 
             - POSTGRES_USER=${POSTGRES_USER:-pguser}
             - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pguser}
