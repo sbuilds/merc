@@ -8,7 +8,7 @@ This implementation probably doesn't process them as *fast
 as it could*, however, it was made to be a scalable  implementation that could process and extract the required data (about 200k samples) in a reasonable space of time.
 
 Following is an overview of the dataflows and containers:
-![overview](Overview.png)
+![overview](design/Overview.png)
 
 [Redis streams](https://redis.io/docs/manual/data-types/streams/) are used to provide a fast store/stream that is used to distribute the data across the workers (extract, store) for processing  
 
