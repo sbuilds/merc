@@ -310,67 +310,7 @@ def main():
                 file_data.update({'static_strings':fstr.static_strings()})
                 
                 rec_id = client.xadd('processed', {'data': json.dumps(file_data)})
-
-    # if args.command == 'process':
-    #         # process command extracts the file meta data and PE meta data
-    #         while True:
-    #             records = client.xreadgroup('process-group','process',{'process':'>'}, count=1)#, noack=True)
-    #             if records:
-    #                 rec_id = records[0][1][0][0].decode('utf-8')
-    #                 logger.debug(f"received message, id: {rec_id}")
-
-    #                 data = json.loads(records[0][1][0][1][b'data'].decode('utf-8'))
-    #                 
-    #                 logger.debug(f"received data: {data}")
-                    
-    #                 fmd = FileMetaData(**data)
-    #                 file_data = {}
-    #                 file_data.update({'id':fmd.database_id})
-    #                 file_data.update({'magic':fmd.magic()})
-    #                 file_data.update({'file_size':fmd.file_size()})
-    #                 file_data.update(fmd.hash())
-    #                 file_data.update({'entropy':fmd.entropy()})
-
-    #                 try:
-    #                     pmd = PEMetaData(**data)
-    #                 except pefile.PEFormatError as e: 
-    #                     logger.error(f"PEFormatError: PE Parsing failed {e}")
-    #                 except AttributeError as e:
-    #                     logger.error(f"AttributeError: PE Parsing failed {e}")
-    #                 else:
-    #                     file_data.update({'imports':pmd.imports()})
-    #                     file_data.update({'exports':pmd.exports()})
-    #                     file_data.update({'headers':pmd.headers()})
-    #                     file_data.update({'headers_optional':pmd.headers_optional()})
-    #                     file_data.update({'sections':pmd.sections()})
-    #                     file_data.update({'certificates':pmd.cert()})
-                    
-    #                 rec_id = client.xadd('processed', {'data': json.dumps(file_data)})
-
-    #                 # client.xdel('process', rec_id)
-    
-    # if args.command == 'process-strings':
-    #     # process-strings command extracts the strings (static only) from the binary
-    #     # this is using floss (flare-floss).
-
-    #     while True:
-    #         records = client.xreadgroup('process-strings-group','process-strings',{'process':'>'}, count=1)
-    #         if records:
-    #             rec_id = records[0][1][0][0].decode('utf-8')
-    #             logger.debug(f"received message, id: {rec_id}")  
-
-    #             data = json.loads(records[0][1][0][1][b'data'].decode('utf-8'))
-    #             logger.info(f"received files {data['file_name']}")
-    #             logger.debug(f"received data: {data}")      
-    #             path = Path(f"{data['file_path']}/{data['file_name']}")    
-
-    #             with open(path, 'rb') as f:
-    #                 str_itr = static.extract_ascii_unicode_strings(f.read())
-    #             strings = [s.string for s in str_itr]
-
-    #             data.update({'strings':strings})
-    #             rec_id = client.xadd('processed-strings', {'data': json.dumps(data)})
-
+                
     if args.command == 'store':
         # store command (container) get the extracted data from process or process-strings and 
         # stores it in postgres database, see database.py.

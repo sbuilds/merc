@@ -21,6 +21,4 @@ RUN apt-get update \
 
 COPY src/ /usr/local/bin/
 
-COPY docker-entrypoint.sh /
-
 WORKDIR /usr/local/bin
