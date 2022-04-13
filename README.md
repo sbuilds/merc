@@ -26,6 +26,12 @@ The python image with the code can be built  with:
 
 The other containers are pulled from docker hub. 
 
+## samples path
+
+The docker compose specifies a bind volume for where it can read the binary files from `./samples` in the project directory. this can just be a symlink to where the samples are and the bind path will be /samples in the container.
+
+eg: `ln -s /mnt/Mah/Binaries ./samples`
+
 ## scaling
 
 The last run I did had 12 extract containers with 8 store containers
