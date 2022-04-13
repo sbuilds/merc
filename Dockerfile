@@ -1,6 +1,5 @@
 #
 FROM python:3.10-slim-buster
-LABEL maintainer="ss"
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -25,6 +24,3 @@ COPY src/ /usr/local/bin/
 COPY docker-entrypoint.sh /
 
 WORKDIR /usr/local/bin
-
-ENTRYPOINT [ "/docker-entrypoint.sh" ]
-

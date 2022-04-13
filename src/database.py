@@ -51,7 +51,7 @@ class MetaData(Base):
         pe_optional_header (JSONB) - {size_if_code:, size_of_image:, size_of_stack_reserve:, size_of_stack_commit:,
                             size_of_heap_reserve:, size_of_heap_commit:, }
         certificates (JSONB) - File signing certificate info
-        strings (Array) - file strings
+        static_strings (Array) - file strings
 
     """
 
@@ -76,7 +76,7 @@ class MetaData(Base):
     sections = Column(JSONB)
     entropy = Column(Float)
     certificates = Column(JSONB)
-    strings = Column(ARRAY(String))
+    static_strings = Column(ARRAY(String))
 
     def __repr__(self):
         return (f"<MetaData: id={self.id!r}, "
@@ -94,7 +94,7 @@ class MetaData(Base):
                 f"sections={self.sections!r}, "
                 f"entropy={self.entropy!r}, "
                 f"certificates={self.certificates!r}, "
-                f"strings={self.strings!r}>")
+                f"static_strings={self.static_strings!r}>")
 
 def store_files(data: List) -> None:
     logger.debug(f"recieved {len(data)} files")

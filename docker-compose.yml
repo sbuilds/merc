@@ -40,23 +40,8 @@ services:
             - datanet
         volumes:
             - type: bind
-              source: ./samples
-              target: /samples
-
-    strings:
-        image: local/merc
-        command: python3 merc.py process-strings
-        restart: "no"
-        depends_on: 
-            - db
-            - redis
-            - extract
-        networks:
-            - datanet
-        volumes:
-            - type: bind
-              source: ./samples
-              target: /samples   
+              source: "${SAMPLES_DIR:-./samples}"
+              target: /samples 
          
     store:
         image: local/merc

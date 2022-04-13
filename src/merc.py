@@ -5,25 +5,38 @@ __version__ = '0.1'
 import os
 import sys
 import logging
-import logging.config
 import argparse
 import json
 import re
-from tarfile import RECORDSIZE
-from typing import List, Dict
 import hashlib
 from pathlib import Path
+from typing import List, Dict
 
 import redis
 import pefile
 import magic
+
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from asn1crypto import cms
 
+from floss import strings as static
+
 class FileStrings:
-    pass
+    """
+        FileStrings class
+        Container for parsing string data utilizing floss. 
+
+        Imports:
+            floss: for string extraction 
+    """
+    def __init__(self, file: bytes) -> None:
+        self.data = file
+
+    def static_strings(self) -> List:
+        stat_str =  static.extract_ascii_unicode_strings(self.data)
+        return [ s.string for s in stat_str ]
 
 class FileMetaData:
     """
@@ -36,20 +49,13 @@ class FileMetaData:
             python-magic: for file magic
     """
 
-    def __init__(self, id: int, file_name: str, file_path: str) -> None:
-        self.database_id = id
-        self.filename = file_name
-        self.filepath = Path(f"{file_path}/{file_name}")
-        self.data = self._open_file()
+    def __init__(self, file: bytes) -> None:
+        self.data = file
 
-    def _open_file(self):
-        with open(self.filepath, 'rb') as f:
-            return f.read()
-
-    def file_size(self):
+    def file_size(self) -> int:
         return len(self.data)
 
-    def hash(self): 
+    def hash(self) -> Dict: 
         hashes = {}
 
         hashes['md5'] = hashlib.md5(self.data).hexdigest()
@@ -66,7 +72,7 @@ class FileMetaData:
             python-magic
             libmagic
         """
-        return magic.from_file(self.filepath)
+        return magic.from_buffer(self.data)
 
     def entropy(self) -> float:
         """
@@ -78,7 +84,6 @@ class FileMetaData:
             counters[byte] += 1
         # can this be fixed as pa
         filesize = len(self.data)
-        # filesize = self.filepath.stat().st_size
         probabilities = [counter / filesize for counter in counters.values()]
         entropy = -sum(probability * math.log2(probability) for probability in probabilities if probability > 0)
 
@@ -100,11 +105,9 @@ class PEMetaData:
             file_name: the name of the file
             file_path: absolute path of the file
     """
-    def __init__(self, id: int, file_name: str, file_path: str) -> None:
-        self.database_id = id
-        self.filename = file_name
-        self.filepath = Path(f"{file_path}/{file_name}")
-        self.pe = pefile.PE(self.filepath)
+    def __init__(self, file: bytes, filepath: str) -> None:
+        self.pe = pefile.PE(data=file)
+        self.filepath = filepath
 
     def headers(self) -> Dict:
         """
@@ -264,68 +267,109 @@ def main():
         for file in files:
             rec_id = client.xadd('process', {'data': json.dumps(file._asdict()).encode('utf-8')})
             logger.debug(f"added {rec_id}: {file.file_path}/{file.file_name} to stream")
-            
-    if args.command == 'process':
-            # process command extracts the file meta data and PE meta data
-            while True:
-                records = client.xreadgroup('process-group','process',{'process':'>'}, count=1)#, noack=True)
-                if records:
-                    rec_id = records[0][1][0][0].decode('utf-8')
-                    logger.debug(f"received message, id: {rec_id}")
-
-                    data = json.loads(records[0][1][0][1][b'data'].decode('utf-8'))
-                    logger.info(f"received files {data['file_name']}")
-                    logger.debug(f"received data: {data}")
-                    
-                    fmd = FileMetaData(**data)
-                    file_data = {}
-                    file_data.update({'id':fmd.database_id})
-                    file_data.update({'magic':fmd.magic()})
-                    file_data.update({'file_size':fmd.file_size()})
-                    file_data.update(fmd.hash())
-                    file_data.update({'entropy':fmd.entropy()})
-
-                    try:
-                        pmd = PEMetaData(**data)
-                    except pefile.PEFormatError as e: 
-                        logger.error(f"PEFormatError: PE Parsing failed {e}")
-                    except AttributeError as e:
-                        logger.error(f"AttributeError: PE Parsing failed {e}")
-                    else:
-                        file_data.update({'imports':pmd.imports()})
-                        file_data.update({'exports':pmd.exports()})
-                        file_data.update({'headers':pmd.headers()})
-                        file_data.update({'headers_optional':pmd.headers_optional()})
-                        file_data.update({'sections':pmd.sections()})
-                        file_data.update({'certificates':pmd.cert()})
-                    
-                    rec_id = client.xadd('processed', {'data': json.dumps(file_data)})
-
-                    # client.xdel('process', rec_id)
     
-    if args.command == 'process-strings':
-        # process-strings command extracts the strings (static only) from the binary
-        # this is using floss (flare-floss) but current release of floss is not python 3. floss
-        # is installed from github directly instead.
-        from floss import strings as static
-
+    if args.command == 'process':
         while True:
-            records = client.xreadgroup('process-strings-group','process-strings',{'process':'>'}, count=1)
+            records = client.xreadgroup('process-group','process',{'process':'>'}, count=1)
             if records:
                 rec_id = records[0][1][0][0].decode('utf-8')
-                logger.debug(f"received message, id: {rec_id}")  
+                logger.debug(f"received message, id: {rec_id}")
 
-                data = json.loads(records[0][1][0][1][b'data'].decode('utf-8'))
-                logger.info(f"received files {data['file_name']}")
-                logger.debug(f"received data: {data}")      
-                path = Path(f"{data['file_path']}/{data['file_name']}")    
+                rec = json.loads(records[0][1][0][1][b'data'].decode('utf-8'))
+                logger.info(f"received files {rec['file_name']}")
 
+                file_data = {}
+                file_data['id'] = rec['id']
+
+
+                path = Path(f"{rec.get('file_path')}/{rec.get('file_name')}")
                 with open(path, 'rb') as f:
-                    str_itr = static.extract_ascii_unicode_strings(f.read())
-                strings = [s.string for s in str_itr]
+                    file_bytes = f.read()
 
-                data.update({'strings':strings})
-                rec_id = client.xadd('processed-strings', {'data': json.dumps(data)})
+                fmd = FileMetaData(file_bytes)
+                file_data.update({'magic':fmd.magic()})
+                file_data.update({'file_size':fmd.file_size()})
+                file_data.update(fmd.hash())
+                file_data.update({'entropy':fmd.entropy()})
+
+                try:
+                    pmd = PEMetaData(file_bytes, path)
+                except pefile.PEFormatError as e: 
+                    logger.error(f"PEFormatError: PE Parsing failed {e}")
+                except AttributeError as e:
+                    logger.error(f"AttributeError: PE Parsing failed {e}")
+                else:
+                    file_data.update({'imports':pmd.imports()})
+                    file_data.update({'exports':pmd.exports()})
+                    file_data.update({'headers':pmd.headers()})
+                    file_data.update({'headers_optional':pmd.headers_optional()})
+                    file_data.update({'sections':pmd.sections()})
+                    file_data.update({'certificates':pmd.cert()})
+
+                fstr = FileStrings(file_bytes)
+                file_data.update({'static_strings':fstr.static_strings()})
+                
+                rec_id = client.xadd('processed', {'data': json.dumps(file_data)})
+
+    # if args.command == 'process':
+    #         # process command extracts the file meta data and PE meta data
+    #         while True:
+    #             records = client.xreadgroup('process-group','process',{'process':'>'}, count=1)#, noack=True)
+    #             if records:
+    #                 rec_id = records[0][1][0][0].decode('utf-8')
+    #                 logger.debug(f"received message, id: {rec_id}")
+
+    #                 data = json.loads(records[0][1][0][1][b'data'].decode('utf-8'))
+    #                 
+    #                 logger.debug(f"received data: {data}")
+                    
+    #                 fmd = FileMetaData(**data)
+    #                 file_data = {}
+    #                 file_data.update({'id':fmd.database_id})
+    #                 file_data.update({'magic':fmd.magic()})
+    #                 file_data.update({'file_size':fmd.file_size()})
+    #                 file_data.update(fmd.hash())
+    #                 file_data.update({'entropy':fmd.entropy()})
+
+    #                 try:
+    #                     pmd = PEMetaData(**data)
+    #                 except pefile.PEFormatError as e: 
+    #                     logger.error(f"PEFormatError: PE Parsing failed {e}")
+    #                 except AttributeError as e:
+    #                     logger.error(f"AttributeError: PE Parsing failed {e}")
+    #                 else:
+    #                     file_data.update({'imports':pmd.imports()})
+    #                     file_data.update({'exports':pmd.exports()})
+    #                     file_data.update({'headers':pmd.headers()})
+    #                     file_data.update({'headers_optional':pmd.headers_optional()})
+    #                     file_data.update({'sections':pmd.sections()})
+    #                     file_data.update({'certificates':pmd.cert()})
+                    
+    #                 rec_id = client.xadd('processed', {'data': json.dumps(file_data)})
+
+    #                 # client.xdel('process', rec_id)
+    
+    # if args.command == 'process-strings':
+    #     # process-strings command extracts the strings (static only) from the binary
+    #     # this is using floss (flare-floss).
+
+    #     while True:
+    #         records = client.xreadgroup('process-strings-group','process-strings',{'process':'>'}, count=1)
+    #         if records:
+    #             rec_id = records[0][1][0][0].decode('utf-8')
+    #             logger.debug(f"received message, id: {rec_id}")  
+
+    #             data = json.loads(records[0][1][0][1][b'data'].decode('utf-8'))
+    #             logger.info(f"received files {data['file_name']}")
+    #             logger.debug(f"received data: {data}")      
+    #             path = Path(f"{data['file_path']}/{data['file_name']}")    
+
+    #             with open(path, 'rb') as f:
+    #                 str_itr = static.extract_ascii_unicode_strings(f.read())
+    #             strings = [s.string for s in str_itr]
+
+    #             data.update({'strings':strings})
+    #             rec_id = client.xadd('processed-strings', {'data': json.dumps(data)})
 
     if args.command == 'store':
         # store command (container) get the extracted data from process or process-strings and 
@@ -341,33 +385,33 @@ def main():
                 for rec in records:
                     # need to split the streams 'processed' and 'processed-strings' 
                     # so the database insert can work on each dataset respectively.
-                    if rec[0] == b'processed':
-                        metadata = [json.loads(x[1][b'data'].decode('utf-8')) for x in records[0][1]]
-                        rec_ids = [x[0].decode('utf-8') for x in records[0][1]]
+                    # if rec[0] == b'processed':
+                    metadata = [json.loads(x[1][b'data'].decode('utf-8')) for x in records[0][1]]
+                    rec_ids = [x[0].decode('utf-8') for x in records[0][1]]
 
+                    try:
+                        db.store_data(metadata)
+                    except Exception as e:
+                        logger.error(f"database save for {[x['id'] for x in metadata]} failed, {e}")
+                    else:
                         try:
-                            db.store_data(metadata)
+                            client.xdel('processed', *rec_ids)
                         except Exception as e:
-                            logger.error(f"database save for {[x['id'] for x in metadata]} failed, {e}")
-                        else:
-                            try:
-                                client.xdel('processed', *rec_ids)
-                            except Exception as e:
-                                logger.error(f"xdel processed error: {e}")
+                            logger.error(f"xdel processed error: {e}")
 
-                    elif rec[0] == b'processed-strings':
-                        stringdata = [json.loads(x[1][b'data'].decode('utf-8')) for x in records[0][1]]
-                        rec_ids = [x[0].decode('utf-8') for x in records[0][1]]
+                    # elif rec[0] == b'processed-strings':
+                    #     stringdata = [json.loads(x[1][b'data'].decode('utf-8')) for x in records[0][1]]
+                    #     rec_ids = [x[0].decode('utf-8') for x in records[0][1]]
 
-                        try:
-                            db.store_data(stringdata)
-                        except Exception as e:
-                            logger.error(f"database save for {[x['id'] for x in stringdata]} failed, {e}")
-                        else:
-                            try:
-                                client.xdel('processed-strings', *rec_ids)
-                            except Exception as e:
-                                logger.error(f"xdel processed-strings error: {e}")
+                    #     try:
+                    #         db.store_data(stringdata)
+                    #     except Exception as e:
+                    #         logger.error(f"database save for {[x['id'] for x in stringdata]} failed, {e}")
+                    #     else:
+                    #         try:
+                    #             client.xdel('processed-strings', *rec_ids)
+                    #         except Exception as e:
+                    #             logger.error(f"xdel processed-strings error: {e}")
 
 
 if __name__ == '__main__':
