@@ -38,10 +38,13 @@ Once the containers are running the loader.py script can be used to pre-load the
 
 In order to use the loader script you need to export the database host, database user, database pass and database. For the sake of ease these can just be the defaults (from the docker compose)
 
-`POSTGRES_DB=merc`
-`POSTGRES_PASSWORD=pgusegr`
-`POSTGRES_USER=pguser`
-`POSTGRES_HOST=127.0.0.1`
+`export POSTGRES_DB=merc`
+
+`export POSTGRES_PASSWORD=pgusegr`
+
+`export POSTGRES_USER=pguser`
+
+`export POSTGRES_HOST=127.0.0.1`
 
 ## Bin'n'pieces
 
