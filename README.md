@@ -16,8 +16,6 @@ While this design has all the extraction - PE, strings etc in one container its 
 
 The loader is just a script to prime the system, this could be improved by watching a directory or scheduling processing.
 
-The data from the extraction can be downloaded in json-line format from [onedrive](https://1drv.ms/u/s!As2eL12UjNUQiVjq5zgB2-Z4Z10f?e=9D6MR3)
-
 Following are the steps to setup the processing.
 
 ## docker image
