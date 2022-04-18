@@ -16,6 +16,30 @@ While this design has all the extraction - PE, strings etc in one container its 
 
 The loader is just a script to prime the system, this could be improved by watching a directory or scheduling processing.
 
+If you just want the output then the following gdrive folder contains the extracted data from this process merged with data from the Practical Security Analytics samples csv. https://drive.google.com/drive/folders/1pK3lTjLXFudbmK_9Y19PtFAPvIXGs7wW
+
+fields in this json are:
+
+* "file_name": The name or id from the dataset
+* "md5": MD5 hash of the file
+* "sha1": SHA1 hash of the file
+* "sha256": SHA256 of the file
+* "imports": PE Imports
+* "exports": PE Exports
+* "file_size": File size/length
+* "file_type": This dataset is always exe from the ML source
+* "headers": PE headers.
+* "headers_optional": PE additional/optional headers
+* "list": From the Practical Security Analytics dataset csv, blacklist or whitelist, whether or not the file whitelist is malicious or legitimate.
+* "magic": The extracted PE file magic text from signature.
+* "entropy": File Shannon entropy.
+* "certificates": Extracted certificates from the PE files, certificate, public key, subject, issuer, fingerprint and serial. 
+* "positives": From the Practical Security Analytics dataset, the number of antivirus engines that flag this file as malicious.
+* "sections": PE sections.
+* "static_strings": extracted static strings UTF8 and UTF16.
+* "submitted": The sample date to the Practical Security Analytics dataset.
+* "total": From the Practical Security Analytics dataset, the number of antivirus engines that scan this time at the time.
+
 Following are the steps to setup the processing.
 
 ## docker image
