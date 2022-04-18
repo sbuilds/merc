@@ -18,7 +18,7 @@ The loader is just a script to prime the system, this could be improved by watch
 
 If you just want the output then the following gdrive folder contains the extracted data from this process merged with data from the Practical Security Analytics samples csv. https://drive.google.com/drive/folders/1pK3lTjLXFudbmK_9Y19PtFAPvIXGs7wW
 
-fields in this json are:
+The format is json-line, the fields are:
 
 * "file_name": The name or id from the dataset
 * "md5": MD5 hash of the file
